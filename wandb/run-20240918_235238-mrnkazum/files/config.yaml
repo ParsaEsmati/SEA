@@ -1,0 +1,95 @@
+_wandb:
+    value:
+        cli_version: 0.18.1
+        m: []
+        python_version: 3.12.3
+        t:
+            "1":
+                - 1
+                - 55
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.12.3
+            "5": 0.18.1
+            "8":
+                - 5
+            "12": 0.18.1
+            "13": linux-x86_64
+KL_weight_max:
+    value: 0
+KL_weight_min:
+    value: 0
+MLP_ratio:
+    value: 4
+batch_size:
+    value: 128
+block_size:
+    value: 10
+case_name:
+    value: cylinder_flow
+coordinates_path:
+    value: /home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/coordinates.npy
+csv_scale_name:
+    value: scaler
+device:
+    value: cpu
+dimension:
+    value: 2D
+embed_dim:
+    value: 128
+epoch_num:
+    value: 100
+field_data_path:
+    value: /home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/field_data.npy
+field_groups:
+    value:
+        - - 0
+          - 1
+        - - 2
+final_save:
+    value: false
+input_path:
+    value: /home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/input_data.npy
+k:
+    value: null
+learning_rate:
+    value: 0.0001
+m:
+    value: 5
+"n":
+    value: 5
+n_heads:
+    value: 8
+num_fields:
+    value: 12
+num_layers:
+    value: 12
+pad_field_value:
+    value: 0
+pad_id:
+    value: -1
+perform_initial_test:
+    value: true
+project_name:
+    value: SEA_CylinderFlow
+random_seed:
+    value: 42
+run_name:
+    value: encoder_decoder
+save_dir:
+    value: ./checkpoints
+scale_feature_range:
+    value: null
+test_mesh_structure:
+    value: true
+train_fraction:
+    value: 0.6
+use_wandb:
+    value: true
+val_fraction:
+    value: 0.2
+validation_interval:
+    value: 1

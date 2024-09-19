@@ -1,0 +1,24 @@
+{"time":"2024-09-18T23:57:13.912199127+01:00","level":"INFO","msg":"using version","core version":"0.18.1"}
+{"time":"2024-09-18T23:57:13.912205045+01:00","level":"INFO","msg":"created symlink","path":"/home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/SEA/wandb/run-20240918_235713-81pdvu6v/logs/debug-core.log"}
+{"time":"2024-09-18T23:57:13.912220668+01:00","level":"INFO","msg":"using version","core version":"0.18.1"}
+{"time":"2024-09-18T23:57:13.912221916+01:00","level":"INFO","msg":"created symlink","path":"/home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/SEA/wandb/run-20240918_235713-81pdvu6v/logs/debug-core.log"}
+{"time":"2024-09-18T23:57:13.914406134+01:00","level":"INFO","msg":"created new stream","id":"81pdvu6v"}
+{"time":"2024-09-18T23:57:13.914423594+01:00","level":"INFO","msg":"stream: started","id":"81pdvu6v"}
+{"time":"2024-09-18T23:57:13.914441776+01:00","level":"INFO","msg":"sender: started","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:13.91447411+01:00","level":"INFO","msg":"handler: started","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:13.914432794+01:00","level":"INFO","msg":"writer: Do: started","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:14.11579396+01:00","level":"ERROR","msg":"HTTP error","status":401,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2024-09-18T23:57:14.115857793+01:00","level":"ERROR","msg":"sender: upsertRun:","error":"failed to upsert bucket: returned error 401 Unauthorized: {\"errors\":[{\"message\":\"user is not logged in\",\"path\":[\"upsertBucket\"],\"extensions\":{\"code\":\"PERMISSION_ERROR\"}}],\"data\":{\"upsertBucket\":null}}"}
+{"time":"2024-09-18T23:57:15.787334179+01:00","level":"INFO","msg":"stream: closing","id":"81pdvu6v"}
+{"time":"2024-09-18T23:57:15.904514287+01:00","level":"ERROR","msg":"HTTP error","status":401,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2024-09-18T23:57:15.904615296+01:00","level":"ERROR","msg":"sender: sendConfig:","error":"returned error 401 Unauthorized: {\"errors\":[{\"message\":\"user is not logged in\",\"path\":[\"upsertBucket\"],\"extensions\":{\"code\":\"PERMISSION_ERROR\"}}],\"data\":{\"upsertBucket\":null}}"}
+{"time":"2024-09-18T23:57:15.905562048+01:00","level":"WARN","msg":"No requirements.txt found, not creating job artifact. See https://docs.wandb.ai/guides/launch/create-job"}
+{"time":"2024-09-18T23:57:15.905581743+01:00","level":"INFO","msg":"sender: sendDefer: no job artifact to save"}
+{"time":"2024-09-18T23:57:15.958314964+01:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2024-09-18T23:57:15.958384398+01:00","level":"ERROR","msg":"runfiles: CreateRunFiles returned error: returned error 404 Not Found: {\"errors\":[{\"message\":\"project /SEA_CylinderFlow not found during createRunFiles\",\"path\":[\"createRunFiles\"]}],\"data\":{\"createRunFiles\":null}}"}
+{"time":"2024-09-18T23:57:16.076401295+01:00","level":"ERROR","msg":"HTTP error","status":404,"method":"POST","url":"https://api.wandb.ai/graphql"}
+{"time":"2024-09-18T23:57:16.076497071+01:00","level":"ERROR","msg":"runfiles: CreateRunFiles returned error: returned error 404 Not Found: {\"errors\":[{\"message\":\"project /SEA_CylinderFlow not found during createRunFiles\",\"path\":[\"createRunFiles\"]}],\"data\":{\"createRunFiles\":null}}"}
+{"time":"2024-09-18T23:57:16.076768798+01:00","level":"INFO","msg":"writer: Close: closed","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:16.07667738+01:00","level":"INFO","msg":"handler: closed","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:16.076847967+01:00","level":"INFO","msg":"sender: closed","stream_id":{"value":"81pdvu6v"}}
+{"time":"2024-09-18T23:57:16.076927808+01:00","level":"INFO","msg":"stream: closed","id":"81pdvu6v"}
