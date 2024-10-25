@@ -4,9 +4,9 @@ def get_config_spatial():
         # General
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'save_dir': './checkpoints',
-        'field_data_path': '/home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/all_data/field_data.npy',
-        'input_path': '/home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/all_data/input_data.npy',
-        'coordinates_path': '/home/parsa/projects/MLAcceleratedNumericalSim/SEA:StateExchangeAttention/data/CF/all_data/coordinates.npy',
+        'field_data_path': './data/CF/all_data/field_data.npy',
+        'input_path': './data/CF/all_data/input_data.npy',
+        'coordinates_path': './data/CF/all_data/coordinates.npy',
 
         # Data splitting parameters
         'train_fraction': 0.8,
