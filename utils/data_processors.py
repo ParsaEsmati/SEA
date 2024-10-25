@@ -7,23 +7,23 @@ from models.encoder_decoder import SpatialModel
 from utils.modular_testing import unit_test_create_partitions2D, unit_test_create_partitions3D
 
 class DataPartitioner2D:
-    def __init__(self, x_coords, y_coords, vars, m=9, n=9, pad_id=-1, pad_field_value=0, device='cpu'):
+    def __init__(self, x_coords, y_coords, m=9, n=9, pad_id=-1, pad_field_value=0, device='cpu'):
         self.device = device
         self.x_coords = x_coords.to(self.device).float()
         self.y_coords = y_coords.to(self.device).float()
         self.full_coords = torch.stack((self.x_coords, self.y_coords), dim=1)
-
-        self.var_list = [var.to(self.device).float() for var in vars if var is not None]
-
-        if len(self.var_list) == 0:
-            raise ValueError("At least one variable must be provided")
 
         self.m = m
         self.n = n
         self.pad_id = pad_id
         self.pad_field_value = pad_field_value
 
-    def create_partitions(self):
+    def create_partitions(self, vars):
+        self.var_list = [var.to(self.device).float() for var in vars if var is not None]
+
+        if len(self.var_list) == 0:
+            raise ValueError("At least one variable must be provided")
+
         x_min, x_max = torch.min(self.x_coords), torch.max(self.x_coords)
         y_min, y_max = torch.min(self.y_coords), torch.max(self.y_coords)
 
@@ -88,15 +88,19 @@ class DataPartitioner2D:
         return padded_partitions, padded_index_map
 
     def inverse_partition(self, external_partitions=None, time_dim=None):
-        reconstructed_coords = torch.empty_like(self.full_coords)                  # [C,2]
-        reconstructed_fields = torch.empty_like(torch.stack(self.var_list, dim=2)) # [B,C,F]
+        reconstructed_coords = torch.empty_like(self.full_coords)
+
+        dummy_var = torch.stack(self.var_list, dim=2)
+        _,C,F = dummy_var.shape
+        B = external_partitions[0][1].shape[0]
+        reconstructed_fields = torch.empty((B,C,F))
 
         time_dim   = time_dim            if time_dim            is not None else reconstructed_fields.shape[0]
         partitions = external_partitions if external_partitions is not None else self.padded_partitions
 
         reconstructed_fields = reconstructed_fields[:time_dim]
 
-        for idx, (coords, fields) in enumerate(partitions): # fields: [B,C,F]
+        for idx, (coords, fields) in enumerate(partitions):
             indices         =   self.padded_index_map[idx]
             valid_mask      =   indices != self.pad_id
             valid_indices   =   indices[valid_mask]
@@ -125,7 +129,7 @@ class DataPartitioner3D:
         self.k = k
         self.pad_id = pad_id
         self.pad_field_value = pad_field_value
-
+        
     def create_partitions(self):
         x_min, x_max = torch.min(self.x_coords), torch.max(self.x_coords)
         y_min, y_max = torch.min(self.y_coords), torch.max(self.y_coords)
@@ -196,15 +200,19 @@ class DataPartitioner3D:
         return padded_partitions, padded_index_map
 
     def inverse_partition(self, external_partitions=None, time_dim=None):
-        reconstructed_coords = torch.empty_like(self.full_coords)                  # [C,3]
-        reconstructed_fields = torch.empty_like(torch.stack(self.var_list, dim=2)) # [B,C,F]
+        reconstructed_coords = torch.empty_like(self.full_coords)
+
+        dummy_var = torch.stack(self.var_list, dim=2)
+        _,C,F = dummy_var.shape
+        B = external_partitions[0][1].shape[0] if external_partitions else dummy_var.shape[0]
+        reconstructed_fields = torch.empty((B,C,F), device=self.device)
 
         time_dim   = time_dim            if time_dim            is not None else reconstructed_fields.shape[0]
-        partitions = external_partitions if external_partitions is not None else self.partitions
+        partitions = external_partitions if external_partitions is not None else self.padded_partitions
 
         reconstructed_fields = reconstructed_fields[:time_dim]
 
-        for idx, (coords, fields) in enumerate(partitions): # fields: [B,C,F]
+        for idx, (coords, fields) in enumerate(partitions):
             indices         =   self.padded_index_map[idx]
             valid_mask      =   indices != self.pad_id
             valid_indices   =   indices[valid_mask]
@@ -280,33 +288,32 @@ class MinMaxScaler:
         else:
             raise FileNotFoundError(f"No saved values found at {load_file}")
         
-# TODO: we have to add all the parameters to the temporal config 
 class ProcessData:
-    def __init__(self, n_inp, n_patches, model_path, spatial_model_dim, batch_size, config_spatial, device='cpu'):
-        self.num_real_fields = 12
-        self.num_fields = self.num_real_fields // 2
-        self.num_embedded_fields = 2
-        self.model_path = model_path
-        self.batch_size = batch_size
-        self.device = device
+    def __init__(self, n_inp, config):
+        self.config = config
+        self.model_path = config['encoder_decoder_path']
+        self.batch_size = config['spatial_batch_size']
+        self.device = config['device']
         self.n_inp = n_inp
-        self.embed_dim = spatial_model_dim
-        self.P = n_patches
-        self.config_spatial = config_spatial
-        self.model_spatial = self.initialize_spatial_model()
-        self.load_model()
+        self.embed_dim = config['embed_dim_spatial']
+
+        if config['dimension'] == '3D':
+            self.P = (config['m']-1) * (config['n']-1) * (config['k']-1)
+        else:
+            self.P = (config['m']-1) * (config['n']-1)
 
     def initialize_spatial_model(self):
         return SpatialModel(
-            field_groups=self.config_spatial['field_groups'],
+            field_groups=self.config['field_groups'],
             n_inp=self.n_inp,
-            MLP_hidden=self.n_inp * self.config_spatial['mlp_hidden_expansion_fact'],
-            num_layers=self.config_spatial['num_layers'],
-            embed_dim=self.config_spatial['embed_dim'],
-            n_heads=self.config_spatial['n_heads'],
-            max_len=self.config_spatial.get('max_len', 1000),
-            src_len=self.config_spatial.get('src_len', 0),
-            dropout=self.config_spatial['dropout']
+            MLP_hidden=self.config['MLP_hidden_spatial'],
+            num_layers=self.config['num_layers_spatial'],
+            embed_dim=self.config['embed_dim_spatial'],
+            n_heads=self.config['n_heads_spatial'],
+            max_len=self.config['block_size_spatial'],
+            src_len=self.config['src_len_spatial'],
+            variational=self.config['variational_spatial'],
+            dropout=self.config['dropout_spatial']
         ).to(self.device)
 
     def load_model(self):
@@ -316,13 +323,18 @@ class ProcessData:
         self.model_spatial.eval()
 
     def initialize_and_process_data(self, data):
-        data_spatial_dataset = EncoderDecoderDataset(data)
-        dataloader = DataLoader(data_spatial_dataset, batch_size=self.batch_size, shuffle=False)
+        if isinstance(data, torch.utils.data.DataLoader):
+            dataloader = data
+        else:
+            data_spatial_dataset = EncoderDecoderDataset(data)
+            dataloader = DataLoader(data_spatial_dataset, batch_size=1000, shuffle=False)
+        
         processed_data = self.process_data(dataloader)
-        self.clear_gpu_memory()
         return processed_data
 
     def process_data(self, dataloader):
+        self.model_spatial = self.initialize_spatial_model()
+        self.load_model()
         self.model_spatial.to(self.device)
         processed_chunks = []
 
@@ -330,27 +342,24 @@ class ProcessData:
             for data in dataloader:
                 data = data.to(self.device)
                 data = self.model_spatial.generate_padding_mask(data)
-                z, _, _ = self.model_spatial.encode(data)
-                # z is already in the shape [B, P, 2, D], so no need to reshape
+                if self.config['variational_spatial']:
+                    z, _, _ = self.model_spatial.encode(data)
+                else:
+                    z = self.model_spatial.encode(data)
                 processed_chunks.append(z.cpu())
 
-        self.clear_gpu_memory()
+        #self.clear_gpu_memory()
         return torch.cat(processed_chunks, dim=0)
 
-    def decode_data(self, data, device=None):
-        device = device or self.device
-        data = data.to(device)
-        B, T, F, D = data.shape
-        P = self.P
-        data = data.reshape(B * T, P, F, D)  # Reshape to [B*T, P, 2, D]
-
-        self.model_spatial.to(device)
+    def decode_data(self, data):
+        self.model_spatial = self.initialize_spatial_model()
+        self.load_model()
+        self.model_spatial.to(self.device)
+        data = data.to(self.device)
         with torch.no_grad():
             decoded = self.model_spatial.decode(data)
-            decoded = decoded.reshape(B, T, P, self.num_real_fields, -1)
             result = decoded.cpu()
 
-        self.clear_gpu_memory()
         return result
 
     def clear_gpu_memory(self):
@@ -375,7 +384,72 @@ class EncoderDecoderDataset(Dataset):
 
         data_tensor = self.data[idx]
         return data_tensor  # Return the data as both input and target
-    
+
+class TemporalDataset(Dataset):
+    def __init__(self, data_list, data_list_original, field_ib, src_len=64, overlap=0, device='cpu', time_shifting_flag=False):
+        self.device              =    device
+        self.data_list           =    data_list
+        self.data_list_original  =    data_list_original
+        self.field_ib            =    field_ib
+        self.src_len             =    src_len
+        self.overlap             =    overlap
+        self.step                =    src_len - overlap
+        self.time_shifting_flag  =    time_shifting_flag
+
+        self.num_samples = 0
+        self.segment_samples = []
+
+        # Calculate the number of valid src in the data
+        # this is for the model that does not use tgt, instead plays with mask to reveal information
+        for data in data_list:
+            num_pairs = data.shape[0] // self.step
+            self.segment_samples.append(num_pairs)
+            self.num_samples += num_pairs
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        """
+        src: Time index fed to model
+        tgt: Time index past src the model should estimate
+        tgt_original: Original spatially unprocessed tgt
+        field_ib_out: Field input/boundary
+        """
+
+        # Determine which data segment the index falls into
+        segment_index = 0
+        cumulative_samples = 0
+
+        for i, samples in enumerate(self.segment_samples):
+            cumulative_samples += samples
+            if idx < cumulative_samples:
+                segment_index = i
+                break
+
+        if idx < cumulative_samples:
+            data_idx = idx - (cumulative_samples - self.segment_samples[segment_index])
+        else:
+            raise IndexError("Index out of range")
+
+
+        if self.time_shifting_flag:
+            shift_idx = np.random.randint(0, self.data_list[segment_index].shape[0] - self.step)
+        else:
+            shift_idx = 0
+        active_data = self.data_list[segment_index]
+        active_data_original = self.data_list_original[segment_index]
+        active_field_ib = self.field_ib[segment_index]
+
+        start_idx = data_idx * self.step
+        end_idx = start_idx + self.src_len
+
+        src = active_data[start_idx + shift_idx :  end_idx + shift_idx]
+        tgt = active_data[start_idx+1+ shift_idx :  end_idx+1+ shift_idx]
+        tgt_original = active_data_original[start_idx+1+ shift_idx : end_idx+1+ shift_idx]
+        field_ib_out = active_field_ib[start_idx + shift_idx : end_idx + shift_idx]
+
+        return src, tgt, tgt_original, field_ib_out
 
 class MeshProcessor:
     def __init__(self, config: Dict[str, Any], coordinates: Tuple[torch.Tensor, ...]): # coordinates: [3, C]
@@ -409,6 +483,8 @@ class MeshProcessor:
 
     def patchify_and_scale(self, data: torch.Tensor, train_indices: np.ndarray = None) -> Tuple[torch.Tensor, torch.Tensor, Tuple[torch.Tensor, ...], Any]:
         T, N, F = data.shape
+        batch_stacked_fields = []
+        batch_stacked_coords = []
 
         # Scale the data before patchifying
         if self.scale_feature_range is not None:
@@ -425,7 +501,6 @@ class MeshProcessor:
                     raise ValueError(f"No saved scaler values found and train_indices is None. Error: {str(e)}")
 
         scaled_data = self._scale_fields(data)
-        var_list = [scaled_data[:,:,i].to(torch.float32) for i in range(scaled_data.shape[-1])]
         
         m, n = self.config['m'], self.config['n']
         k = self.config['k'] if self.dimension == '3D' else None
@@ -434,27 +509,37 @@ class MeshProcessor:
             self.partitioner = DataPartitioner3D(x_coords=self.coordinates[0], 
                                                y_coords=self.coordinates[1], 
                                                z_coords=self.coordinates[2],
-                                               vars=var_list, m=m, n=n, k=k, 
+                                               m=m, n=n, k=k, 
                                                pad_id=-1, pad_field_value=0)
         else:
             self.partitioner = DataPartitioner2D(x_coords=self.coordinates[0], 
                                                y_coords=self.coordinates[1],
-                                               vars=var_list, m=m, n=n, 
+                                               m=m, n=n, 
                                                pad_id=-1, pad_field_value=0)
 
         # Patchify the scaled data
-        patched_data, _ = self.partitioner.create_partitions()
-        
+        for idx in range(0, len(data), 2048):
+            batch_data = scaled_data[idx:idx+2048]
+            var_list = [batch_data[:,:,i].to(torch.float32) for i in range(batch_data.shape[-1])]
+            patched_data, _ = self.partitioner.create_partitions(var_list)
+
+            fields_list = [part[1] for part in patched_data]
+            coords_list = [part[0] for part in patched_data]
+
+            stacked_fields = torch.stack(fields_list, dim=1)  # [B, P, C, F]
+            stacked_coords = torch.stack(coords_list, dim=1)  # [T, P, C, 3] or [T, P, C, 2]
+
+            batch_stacked_fields.append(stacked_fields)
+            #batch_stacked_coords.append(stacked_coords)
+
         if self.config.get('perform_initial_test', True):
             self._perform_initial_test(patched_data)
 
-        fields_list = [part[1] for part in patched_data]
-        coords_list = [part[0] for part in patched_data]
+        # Concatenate all batches
+        final_stacked_fields = torch.cat(batch_stacked_fields, dim=0)  # [T, P, C, F]
+        self.stacked_coords = stacked_coords  # [T, P, C, 3] or [T, P, C, 2]
 
-        stacked_fields = torch.stack(fields_list, dim=1)  # [T, P, C, F]
-        self.stacked_coords = torch.stack(coords_list, dim=1)  # [T, P, C, 3] or [T, P, C, 2]
-
-        return self.stacked_coords, stacked_fields
+        return self.stacked_coords, final_stacked_fields
 
     def _scale_fields(self, fields: torch.Tensor) -> torch.Tensor:
         if self.scale_feature_range is None:
@@ -467,16 +552,23 @@ class MeshProcessor:
 
     def inverse_scale_and_unpatch(self, scaled_fields: torch.Tensor) -> torch.Tensor:  # [T, P, C, F]
         T, P, C, F = scaled_fields.shape
-        unpatched_data = [(self.stacked_coords[:,i].to(torch.float32), scaled_fields[:,i].to(torch.float32)) for i in range(P)]
-        reconstructed_coords, reconstructed_fields = self.partitioner.inverse_partition(unpatched_data, time_dim=T)
+        final_reconstructed_fields = []
+        for idx in range(0, T, 2048):
+            coords_process = self.stacked_coords
+            scaled_fields_process = scaled_fields[idx:idx+2048]
+            unpatched_data = [(coords_process[:,i].to(torch.float32), scaled_fields_process[:,i].to(torch.float32)) for i in range(P)]
+            reconstructed_coords, reconstructed_fields = self.partitioner.inverse_partition(unpatched_data, time_dim=T)
+            final_reconstructed_fields.append(reconstructed_fields)
+
+        final_reconstructed_fields = torch.cat(final_reconstructed_fields, dim=0)
 
         # Inverse scale
         if self.scale_feature_range is not None:
-            unscaled_fields = torch.zeros_like(reconstructed_fields)
+            unscaled_fields = torch.zeros_like(final_reconstructed_fields)
             for scaler, group in zip(self.scalers, self.field_groups):
-                unscaled_fields[..., group] = scaler.inverse_transform(reconstructed_fields[..., group])
+                unscaled_fields[..., group] = scaler.inverse_transform(final_reconstructed_fields[..., group])
         else:
-            unscaled_fields = reconstructed_fields
+            unscaled_fields = final_reconstructed_fields
 
         return unscaled_fields
     
@@ -503,3 +595,4 @@ class MeshProcessor:
                 inversed_coordx=reconstructed_coordinations[:, 0],
                 inversed_coordy=reconstructed_coordinations[:, 1]
             )
+

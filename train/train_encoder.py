@@ -9,72 +9,7 @@ from models.encoder_decoder import SpatialModel
 from utils.modular_testing import test_mesh_processor_2d, test_mesh_processor_3d
 import time
 import sys
-
-"""
-config = {
-
-    # General
-    'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-    'case_name': 'cylinder_flow',
-    'save_dir': './checkpoints',
-
-    # Data loading parameters (from previous response)
-    'field_data_path': '/path/to/field_data.npy',
-    'input_path': '/path/to/input_data.npy',
-    'coordinates_path': '/path/to/coordinates.npy',
-
-
-    # Data splitting parameters
-    'train_fraction': 0.6,
-    'val_fraction': 0.2,
-    'random_seed': 42,  # for reproducibility in shuffling
-
-    # Mesh processing parameters
-    'mesh_processor': {
-        # Add any specific parameters for MeshProcessor here
-        # For example:
-        'dimension': '3D',  # or '2D'
-        'field_groups': [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]],
-        'scale_feature_range': None,
-        'csv_scale_name': 'scaler',
-        'm': 5,  # number of partitions in x direction
-        'n': 5,  # number of partitions in y direction
-        'k': None,  # number of partitions in z direction (for 3D)
-        'pad_id': -1,
-        'pad_field_value': 0,
-    },
-
-    # Model parameters
-    'num_fields': 12,
-    'MLP_ratio': 4,
-    'num_layers': 12,
-    'embed_dim': 128,
-    'n_heads': 8,
-    'block_size': 10,
-    
-
-    # Testing options
-    'test_mesh_structure': False,
-    'perform_initial_test': True,
-
-    # Logging options
-    'validation_interval': 1,
-    'final_save': False,
-
-    # Data parameters
-    'batch_size': 128,
-
-    # Training parameters
-    'learning_rate': 1e-4,
-    'KL_weight_min': 0.1,
-    'KL_weight_max': 0.9,
-    'epoch_num': 100,
-    'use_wandb': True,
-    'project_name': 'SEA_CylinderFlow',
-    'run_name': 'encoder_decoder'
-}
-
-"""
+import random
 
 def load_and_convert(config: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
     def load_single_file(path: str) -> torch.Tensor:
@@ -108,10 +43,36 @@ def load_and_convert(config: Dict[str, Any]) -> Tuple[torch.Tensor, torch.Tensor
 
     return field_data, coordinates, input_data
 
-def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, EncoderDecoderDataset, EncoderDecoderDataset, torch.Tensor, torch.Tensor, torch.Tensor]:
+def get_datasets(config: Dict[str, Any]) -> Tuple[DataLoader, DataLoader, DataLoader, MeshProcessor]:
+    train_sources, val_sources, test_sources, mesh_processor = process_data(config)
+
+    dataset_train = EncoderDecoderDataset(train_sources)
+    dataset_validation = EncoderDecoderDataset(val_sources)
+    dataset_test = EncoderDecoderDataset(test_sources)
+
+    batch_size = config['batch_size']
+    shuffle = True
+
+    trainLoader = DataLoader(dataset_train, batch_size=batch_size, shuffle=shuffle)
+    validationLoader = DataLoader(dataset_validation, batch_size=batch_size, shuffle=False)
+    testLoader = DataLoader(dataset_test, batch_size=batch_size, shuffle=False)
+
+    return trainLoader, validationLoader, testLoader, mesh_processor
+
+def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, EncoderDecoderDataset, EncoderDecoderDataset, MeshProcessor]:
     """
     Load data, process it, create train/val/test splits, and apply MeshProcessor.
     """
+    seed = config.get('random_seed', 42)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # for multi-GPU.
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
     # Load data
     field_data, coordinates, data_input = load_and_convert(config)
     print(f"Field data shape: {field_data.shape}")
@@ -132,6 +93,12 @@ def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, Encoder
     train_length = int(np.round(total_samples * train_fraction))
     val_length = int(np.round(total_samples * val_fraction))
     test_length = total_samples - train_length - val_length
+
+    print(f"Train length: {train_length}")
+    print(f"Val length: {val_length}")
+    print(f"Test length: {test_length}")
+
+    config['train_size'] = train_length
     
     train_indices = indices[:train_length]
     val_indices = indices[train_length:train_length + val_length]
@@ -142,7 +109,6 @@ def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, Encoder
     stacked_coords, scaled_fields = mesh_processor.patchify_and_scale(field_data, train_indices=train_indices)
 
     # Optionally test mesh structure
-
     if config['test_mesh_structure']:
         reconstructed = mesh_processor.inverse_scale_and_unpatch(scaled_fields)
         if config['dimension'] == '2D':
@@ -151,10 +117,23 @@ def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, Encoder
             test_results = test_mesh_processor_3d(field_data.float(), reconstructed, coordinates)
         print(test_results)
 
-    # Prepare data for model
-    train_sources_tokenized = scaled_fields[train_indices, :, :].permute(0, 1, 3, 2)
-    validation_sources_tokenized = scaled_fields[val_indices, :, :].permute(0, 1, 3, 2)
-    test_sources_tokenized = scaled_fields[test_indices, :, :].permute(0, 1, 3, 2)
+    #---------------------------------------------------------------------------------------------------
+    # This is a switch to allow mixing while keeping the exact structure and dimensions
+    if config['SEA_isolate']:    
+        train_sources_tokenized = scaled_fields[train_indices, :, :].permute(0, 1, 3, 2)
+        validation_sources_tokenized = scaled_fields[val_indices, :, :].permute(0, 1, 3, 2)
+        test_sources_tokenized = scaled_fields[test_indices, :, :].permute(0, 1, 3, 2)
+    elif config['SEA_mixed']:   
+        B, P, C, F = scaled_fields.shape
+        train_sources_tokenized = scaled_fields[train_indices, :, :].reshape(-1,P,F,C)
+        validation_sources_tokenized = scaled_fields[val_indices, :, :].reshape(-1,P,F,C)
+        test_sources_tokenized = scaled_fields[test_indices, :, :].reshape(-1,P,F,C)
+    else:
+        assert False, "Invalid SEA data configuration"
+    #---------------------------------------------------------------------------------------------------
+    
+    n_inp = train_sources_tokenized.shape[3]
+    config['n_inp'] = n_inp
 
     if config.get('print_split_sizes', True):
         print(f'Train size: {train_sources_tokenized.shape[0]}')
@@ -164,51 +143,48 @@ def process_data(config: Dict[str, Any]) -> Tuple[EncoderDecoderDataset, Encoder
         print(f'Validation shape: {validation_sources_tokenized.shape}')
         print(f'Test shape: {test_sources_tokenized.shape}')
 
-    dataset_train = EncoderDecoderDataset(train_sources_tokenized)
-    dataset_validation = EncoderDecoderDataset(validation_sources_tokenized)
-    dataset_test = EncoderDecoderDataset(test_sources_tokenized)
+    return train_sources_tokenized, validation_sources_tokenized, test_sources_tokenized, mesh_processor
 
-    return dataset_train, dataset_validation, dataset_test, stacked_coords, scaled_fields, data_input
-
-
-def pre_train_encoder(config: Dict[str, Any]):
-    dataset_train, dataset_validation, dataset_test, stacked_coords, scaled_fields, data_input = process_data(config)
-    
-    # Get a sample from the dataset to determine the shape
-    sample_data = dataset_train[0]
-    print(f"Sample data shape: {sample_data.shape}")
-    _, _, n_inp = sample_data.shape
-    
-    shuffle = True
-    batch_size = config['batch_size']
-    trainLoader = DataLoader(dataset_train, batch_size=batch_size, shuffle=shuffle)
-    validationLoader = DataLoader(dataset_validation, batch_size=batch_size, shuffle=shuffle)
-    testLoader = DataLoader(dataset_test, batch_size=batch_size, shuffle=shuffle)
-
+def get_model(config: Dict[str, Any], device: torch.device) -> Tuple[torch.nn.Module, torch.nn.Module, torch.optim.Optimizer]:
     model = SpatialModel(
         field_groups=config['field_groups'],
-        n_inp=n_inp,  # Use the extracted n_inp here
+        n_inp=config['n_inp'],  # Use the extracted n_inp here
         MLP_hidden=config['MLP_hidden'],
         num_layers=config['num_layers'],
         embed_dim=config['embed_dim'],
         n_heads=config['n_heads'],
         max_len=config['block_size'],
         src_len=config.get('src_len', 0),
+        variational=config['variational'],
         dropout=config['dropout']
     )
 
-    optimizer = initialize_optimizer(model, learning_rate=config['learning_rate'], total_steps=None)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if config.get('load_pretrained', False):
+        model_path = config['pretrained_model_path']
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        print(f"Loaded pre-trained model from {model_path}")
+
     model = model.to(device)
+    optimizer = initialize_optimizer(model, config)
 
-    total_steps = round(config['epoch_num'] * len(trainLoader))
-    loss_fn = Vloss(config['KL_weight_min'], config['KL_weight_max'], total_steps)
+    if config['variational']:
+        total_steps = round(config['epoch_num'] * config['train_size'] // config['batch_size'])
+        loss_fn = Vloss(config['KL_weight_min'], config['KL_weight_max'], total_steps)
+    else:
+        loss_fn = torch.nn.MSELoss()
 
-    return model, optimizer, trainLoader, validationLoader, testLoader, loss_fn
-    
+    return model, loss_fn, optimizer
+
+def pre_train_encoder(config: Dict[str, Any]):
+    device = torch.device(config['device'])
+    trainLoader, validationLoader, testLoader, mesh_processor = get_datasets(config)
+    model, loss_fn, optimizer = get_model(config, device)
+
+    return model, optimizer, trainLoader, validationLoader, testLoader, loss_fn, mesh_processor
+
 
 def train(config: Dict[str, Any], error_tracker):
-    model, optimizer, trainLoader, validationLoader, testLoader, loss_fn = pre_train_encoder(config)
+    model, optimizer, trainLoader, validationLoader, testLoader, loss_fn, mesh_processor = pre_train_encoder(config)
     device = torch.device(config['device'])
     model.to(device)
     model.train()
@@ -230,14 +206,23 @@ def train(config: Dict[str, Any], error_tracker):
         for data in trainLoader:
             data = data.to(device)
             optimizer.zero_grad()
-            outputs, mu, logvar = model(data)
-            loss = loss_fn(x=data, z_mu=mu, z_logvar=logvar, mu_recon=outputs, sigma_recon=None, iteration=iter)
+            
+            if config['variational']:
+                outputs, mu, logvar = model(data)
+                loss = loss_fn(x=data, z_mu=mu, z_logvar=logvar, mu_recon=outputs, sigma_recon=None, iteration=iter)
+            else:
+                outputs = model(data)
+                loss = loss_fn(outputs, data)
+
             loss.backward()
             optimizer.step()
 
             train_loss += loss.item()
-            train_recon_loss += loss_fn.recon_loss.item()
-            train_kl_loss += loss_fn.KL_loss.item()
+            if config['variational']:
+                train_recon_loss += loss_fn.recon_loss.item()
+                train_kl_loss += loss_fn.KL_loss.item()
+            else:
+                train_recon_loss += loss.item()
             train_r2_sum += calculate_R2(outputs.detach(), data.detach()).item()
             num_train_batches += 1
             iter += 1
@@ -245,11 +230,19 @@ def train(config: Dict[str, Any], error_tracker):
         # Calculate average losses and R2 score
         train_loss /= num_train_batches
         train_recon_loss /= num_train_batches
-        train_kl_loss /= num_train_batches
+        if config['variational']:
+            train_kl_loss /= num_train_batches
         train_r2 = train_r2_sum / num_train_batches
 
         # Log train errors
-        error_tracker.record_train_error(epoch, train_recon_loss, train_r2, loss_fn)
+        train_metrics = {
+            "Loss": train_loss,
+            "Recon_Loss": train_recon_loss,
+            "R2": train_r2
+        }
+        if config['variational']:
+            train_metrics["KL_Loss"] = train_kl_loss
+        error_tracker.record_error("train", epoch, train_metrics)
 
         if epoch % config.get('validation_interval', 1) == 0 or epoch == config['epoch_num']:
             model.eval()
@@ -262,34 +255,53 @@ def train(config: Dict[str, Any], error_tracker):
             with torch.no_grad():
                 for v_data in validationLoader:
                     v_data = v_data.to(device)
-                    v_outputs, v_mu, v_logvar = model(v_data)
-                    v_loss = loss_fn(v_data, v_mu, v_logvar, v_outputs, sigma_recon=None, iteration=iter)
+                    if config['variational']:
+                        v_outputs, v_mu, v_logvar = model(v_data)
+                        v_loss = loss_fn(v_data, v_mu, v_logvar, v_outputs, sigma_recon=None, iteration=iter)
+                    else:
+                        v_outputs = model(v_data)
+                        v_loss = loss_fn(v_outputs, v_data)
 
                     val_loss += v_loss.item()
-                    val_recon_loss += loss_fn.recon_loss.item()
-                    val_kl_loss += loss_fn.KL_loss.item()
+                    if config['variational']:
+                        val_recon_loss += loss_fn.recon_loss.item()
+                        val_kl_loss += loss_fn.KL_loss.item()
+                    else:
+                        val_recon_loss += v_loss.item()
                     val_r2_sum += calculate_R2(v_outputs, v_data).item()
                     num_val_batches += 1
 
             # Calculate average validation losses and R2 score
             val_loss /= num_val_batches
             val_recon_loss /= num_val_batches
-            val_kl_loss /= num_val_batches
+            if config['variational']:
+                val_kl_loss /= num_val_batches
             val_r2 = val_r2_sum / num_val_batches
 
             # Log validation errors
-            error_tracker.record_val_error(epoch, val_recon_loss, val_r2, loss_fn)
+            val_metrics = {
+                "Loss": val_loss,
+                "Recon_Loss": val_recon_loss,
+                "R2": val_r2
+            }
+            if config['variational']:
+                val_metrics["KL_Loss"] = val_kl_loss
+            error_tracker.record_error("val", epoch, val_metrics)
 
             print(f"\nEpoch: {epoch}/{config['epoch_num']}")
-            print(f"Train - Total Loss: {train_loss:.8f}, Recon Loss: {train_recon_loss:.8f}, KL Loss: {train_kl_loss:.8f}, R^2: {train_r2:.8f}")
-            print(f"Val   - Total Loss: {val_loss:.8f}, Recon Loss: {val_recon_loss:.8f}, KL Loss: {val_kl_loss:.8f}, R^2: {val_r2:.8f}")
+            if config['variational']:
+                print(f"Train - Total Loss: {train_loss:.8f}, Recon Loss: {train_recon_loss:.8f}, KL Loss: {train_kl_loss:.8f}, R^2: {train_r2:.8f}")
+                print(f"Val   - Total Loss: {val_loss:.8f}, Recon Loss: {val_recon_loss:.8f}, KL Loss: {val_kl_loss:.8f}, R^2: {val_r2:.8f}")
+            else:
+                print(f"Train - Loss: {train_loss:.8f}, R^2: {train_r2:.8f}")
+                print(f"Val   - Loss: {val_loss:.8f}, R^2: {val_r2:.8f}")
 
             # Check if current model is the best so far
             if val_recon_loss < prev_error:
                 prev_error = val_recon_loss
                 print("--- New Best Model Saved ---")
                 model.to('cpu')
-                model_path = f"{config['save_dir']}/encoder_decoder_{config['case_name']}_{config['run_name']}_best.pt"
+                model_path = f"{config['save_dir']}/encoder_decoder_{config['case_name']}_{config['run_name']}.pt"
                 torch.save(model.state_dict(), model_path)
                 model.to(device)
             else:

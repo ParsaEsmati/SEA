@@ -23,9 +23,9 @@ def get_config_spatial():
         'pad_id': -1,
         'pad_field_value': 0,
         # Model parameters
-        'MLP_hidden': 480,
+        'MLP_hidden': 624,
         'num_layers': 12,
-        'embed_dim': 16,
+        'embed_dim': 32,
         'n_heads': 8,
         'block_size': 2024,
         'src_len': 0,
@@ -45,11 +45,11 @@ def get_config_spatial():
         'KL_weight_max': 0,
         'epoch_num': 5000,
         # wandb parameters
-        'use_wandb': False,
+        'use_wandb': True,
         'run_name': 'run1',
-        'case_name': 'cylinder_flow',
+        'case_name': 'multiphase_flow',
         'project_name': 'SEA_Encoder_Decoder',
-        'WANDB_API_KEY': None,
+        'WANDB_API_KEY': 'a408bff5577f4308fdd2594220f2119323956157',
         # For testing
         'spatial_batch_size': 1000,
 
@@ -110,14 +110,14 @@ def get_config_temporal():
 
         # Temporal model parameters
         'num_layers': 1,
-        'embed_dim': 1024,
+        'embed_dim': 2048,
         'n_heads': 8,
         'block_size': 2024,
         'scale_ratio': 8,
         'src_len': 0,
         'num_fields': len(spatial_config['field_groups']),
         'down_proj': 2,
-        'dropout': 0.1,
+        'dropout': 0.0,
         'exchange_mode': 'sea',
         'pos_encoding_mode': 'learnable',
         'ib_scale_mode': 'mlp',
@@ -125,7 +125,7 @@ def get_config_temporal():
         'ib_mlp_layers': 1, 
         'ib_num': 1, # Number of input/boundary provided to the model
         'add_info_after_cross': True,
-        'LN_type': 'adaln',
+        'LN_type': 'ln',
 
         # Testing options
         'test_mesh_structure': False,
@@ -137,14 +137,14 @@ def get_config_temporal():
         'final_save': False,
 
         # Data parameters
-        'batch_size': 2,
-        'dataset_src_len': 399,
+        'batch_size': 4,
+        'dataset_src_len': 199,
         'dataset_overlap': 0,
         'dataset_time_shifting_flag': False,
 
         # Training parameters
         'variational': False,
-        'learning_rate': 1e-4,
+        'learning_rate': 8e-5,
         'KL_weight_min': 0,
         'KL_weight_max': 0,
         'epoch_num': 3000,

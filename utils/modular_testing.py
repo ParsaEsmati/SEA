@@ -4,8 +4,6 @@ from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-#from utils.data_processors import MinMaxScaler
-
 def unit_test_create_partitions2D(truth_fields, coordx, coordy, inversed_fields, inversed_coordx, inversed_coordy):
     tolerance = 1e-6
     print(f"Truth fields shape: {truth_fields[0].shape}")
@@ -24,7 +22,6 @@ def unit_test_create_partitions2D(truth_fields, coordx, coordy, inversed_fields,
         print(f"Sorted truth field shape: {sorted_field_truth.shape}")
         print(f"Sorted inversed field shape: {sorted_field_inversed.shape}")
 
-        # Ensure the tensors have the same size before comparison
         min_size = min(sorted_field_truth.size(0), sorted_field_inversed.size(0))
         close = torch.all(torch.abs(sorted_field_inversed[:min_size] - sorted_field_truth[:min_size]) < tolerance)
         equal = torch.all(torch.abs(inversed_fields[0, :min_size, var_idx] - truth_fields_stacked[0, :min_size, var_idx]) < tolerance)
@@ -33,7 +30,6 @@ def unit_test_create_partitions2D(truth_fields, coordx, coordy, inversed_fields,
         all_close = all_close and close
         all_equal = all_equal and equal
 
-    # Test coordinates
     coord_tolerance = 1e-6
     coord_x_close = torch.all(torch.abs(torch.sort(coordx)[0] - torch.sort(inversed_coordx)[0]) < coord_tolerance)
     coord_y_close = torch.all(torch.abs(torch.sort(coordy)[0] - torch.sort(inversed_coordy)[0]) < coord_tolerance)
@@ -61,7 +57,6 @@ def unit_test_create_partitions3D(truth_fields, coordx, coordy, coordz, inversed
         print(f"Sorted truth field shape: {sorted_field_truth.shape}")
         print(f"Sorted inversed field shape: {sorted_field_inversed.shape}")
 
-        # Ensure the tensors have the same size before comparison
         min_size = min(sorted_field_truth.size(0), sorted_field_inversed.size(0))
         close = torch.all(torch.abs(sorted_field_inversed[:min_size] - sorted_field_truth[:min_size]) < tolerance)
         equal = torch.all(torch.abs(inversed_fields[0, :min_size, var_idx] - truth_fields_stacked[0, :min_size, var_idx]) < tolerance)
@@ -78,46 +73,7 @@ def unit_test_create_partitions3D(truth_fields, coordx, coordy, coordz, inversed
 
     return close and equal and coord_x_close and coord_y_close and coord_z_close
 
-# def test_min_max_scaler(data):
-#     # Create sample data
-#     if data is None:
-#        data = torch.tensor([[-1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=torch.float32)
 
-#     # Initialize scaler
-#     scaler = MinMaxScaler(feature_range=(-1, 1), name='test_scaler')
-
-#     # Test fit and transform
-#     scaler.fit(data)
-#     scaled_data = scaler.transform(data)
-
-#     # Check if scaled data is within the feature range
-#     assert torch.all(scaled_data >= -1) and torch.all(scaled_data <= 1), "Scaled data out of range"
-
-#     # Check if min and max are correctly scaled
-#     assert torch.isclose(torch.min(scaled_data), torch.tensor(-1.0)), "Minimum value not correctly scaled"
-#     assert torch.isclose(torch.max(scaled_data), torch.tensor(1.0)), "Maximum value not correctly scaled"
-
-#     # Test inverse transform
-#     reconstructed_data = scaler.inverse_transform(scaled_data)
-#     print(reconstructed_data)
-
-#     # Check if reconstructed data matches original data
-#     assert torch.allclose(data, reconstructed_data, atol=1e-6), "Inverse transform failed to reconstruct original data"
-
-#     # Test with unseen data
-#     new_data = torch.tensor([[0, 2, 1], [4, 5, 2], [-1, 8, 3]], dtype=torch.float32)
-#     scaled_new_data = scaler.transform(new_data)
-#     #assert torch.all(scaled_new_data >= -1) and torch.all(scaled_new_data <= 1), "New data not correctly scaled"
-
-#     # Test saving and loading
-#     scaler._record_values()
-#     new_scaler = MinMaxScaler(feature_range=(-1, 1), name='test_scaler')
-#     new_scaler.load_values()
-
-#     assert torch.isclose(scaler.min_val, new_scaler.min_val), "Saved min value doesn't match"
-#     assert torch.isclose(scaler.max_val, new_scaler.max_val), "Saved max value doesn't match"
-
-#     print("All tests passed!")
 def test_mesh_processor_2d(
     data: torch.Tensor,
     processed_data: torch.Tensor,
@@ -171,7 +127,7 @@ def test_mesh_processor_2d(
         print(f"Time step {time_step}: {'Passed' if is_close else 'Failed'}")
         print(f"Max difference: {max_diff:.6f}, Mean difference: {mean_diff:.6f}")
 
-        if i == 0:  # Plot the first tested time step
+        if i == 0:
             plot_all_fields_2d(
                 data,
                 coords[0], coords[1],
@@ -334,7 +290,6 @@ def plot_all_fields_2d(data, coordx, coordy, time_index, filename='all_fields_2d
             save=False
         )
     
-    # Remove any unused subplots
     for i in range(F, len(axs)):
         fig.delaxes(axs[i])
     
