@@ -113,7 +113,7 @@ def main():
             config['load_pretrained'] = True
             model, loss_fn, _ = get_model(config, device)
             
-            # Get test dataloader
+            # Get the test dataloader
             _, _, testLoader, mesh_processor, processor = get_datasets(config)
             
             # Run full autoregressive evaluation
