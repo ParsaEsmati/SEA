@@ -95,7 +95,6 @@ def create_error_tracker(use_wandb, project_name, run_name=None, config=None):
     if use_wandb:
         try:
             import wandb
-            WANDB_API_KEY = config.get("WANDB_API_KEY", None)
             os.environ["WANDB_API_KEY"] = WANDB_API_KEY
             wandb.login()
             print("Successfully logged in to Weights & Biases!")

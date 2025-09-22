@@ -49,7 +49,6 @@ def get_config_spatial():
         'run_name': 'run1',
         'case_name': 'multiphase_flow',
         'project_name': 'SEA_Encoder_Decoder',
-        'WANDB_API_KEY': 'a408bff5577f4308fdd2594220f2119323956157',
         # For testing
         'spatial_batch_size': 1000,
 

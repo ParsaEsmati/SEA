@@ -45,7 +45,6 @@ def get_config_spatial():
         'KL_weight_max': 0,
         'epoch_num': 5000,
         # wandb parameters
-        'use_wandb': False,
         'run_name': 'run1',
         'case_name': 'cylinder_flow',
         'project_name': 'SEA_Encoder_Decoder',
@@ -154,7 +153,7 @@ def get_config_temporal():
         'run_name': 'run1',
         'case_name': 'cylinder_flow',
         'project_name': f'SEA_Temporal',
-        'WANDB_API_KEY': None,
+        'WANDB_API_KEY': None, # EXAMPLE KEY ADD YOUR API KEY HERE
 
         # SEA data configuration
         'SEA_isolate': spatial_config['SEA_isolate'],
